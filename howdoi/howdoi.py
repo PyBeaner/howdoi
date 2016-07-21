@@ -23,7 +23,7 @@ from pygments.lexers import guess_lexer, get_lexer_by_name
 from pygments.formatters.terminal import TerminalFormatter
 from pygments.util import ClassNotFound
 
-from pyquery import PyQuery as pq
+from bs4 import BeautifulSoup
 from requests.exceptions import ConnectionError
 from requests.exceptions import SSLError
 
@@ -45,10 +45,10 @@ else:
 
 
 if os.getenv('HOWDOI_DISABLE_SSL'):  # Set http instead of https
-    SEARCH_URL = 'http://www.google.com/search?q=site:{0}%20{1}'
+    SEARCH_URL = 'http://cn.bing.com/search?q=site:{0}%20{1}'
     VERIFY_SSL_CERTIFICATE = False
 else:
-    SEARCH_URL = 'https://www.google.com/search?q=site:{0}%20{1}'
+    SEARCH_URL = 'https://cn.bing.com/search?q=site:{0}%20{1}'
     VERIFY_SSL_CERTIFICATE = True
 
 URL = os.getenv('HOWDOI_URL') or 'stackoverflow.com'
@@ -93,9 +93,8 @@ def _get_result(url):
 
 def _get_links(query):
     result = _get_result(SEARCH_URL.format(URL, url_quote(query)))
-    html = pq(result)
-    return [a.attrib['href'] for a in html('.l')] or \
-        [a.attrib['href'] for a in html('.r')('a')]
+    html = BeautifulSoup(result)
+    return [title.find('a')['href'] for title in html.find_all(class_='b_title')]
 
 
 def get_link_at_pos(links, position):
@@ -151,14 +150,14 @@ def _get_answer(args, links):
     if args.get('link'):
         return link
     page = _get_result(link + '?answertab=votes')
-    html = pq(page)
+    html = BeautifulSoup(page)
 
-    first_answer = html('.answer').eq(0)
+    first_answer = html.find_all(class_='answer')[0]
     instructions = first_answer.find('pre') or first_answer.find('code')
     args['tags'] = [t.text for t in html('.post-tag')]
 
     if not instructions and not args['all']:
-        text = first_answer.find('.post-text').eq(0).text()
+        text = first_answer.find('.post-text').text()
     elif args['all']:
         texts = []
         for html_tag in first_answer.items('.post-text > *'):
@@ -171,7 +170,7 @@ def _get_answer(args, links):
         texts.append('\n---\nAnswer from {0}'.format(link))
         text = '\n'.join(texts)
     else:
-        text = _format_output(instructions.eq(0).text(), args)
+        text = _format_output(instructions.text, args)
     if text is None:
         text = NO_ANSWER_MSG
     text = text.strip()
